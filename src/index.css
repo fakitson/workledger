@@ -1,0 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: #e6ece2;
+}
+
+.cell:hover {
+  outline: 2px solid #2b4a7a;
+  outline-offset: -1px;
+}
+
+.plot:hover {
+  outline: 2px solid #18241f;
+  outline-offset: -1px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9aab9f;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulse {
+    animation: p 1.6s ease-in-out infinite;
+  }
+  .bar {
+    transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+@keyframes p {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
