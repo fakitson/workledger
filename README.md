@@ -26,6 +26,8 @@ npm run build
 npm test           # Playwright e2e suite
 ```
 
+If your environment pre-installs Chromium outside Playwright's cache, point the suite at it: `CHROMIUM_PATH=/path/to/chromium npm test`.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in your Supabase project:
