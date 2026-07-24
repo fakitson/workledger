@@ -37,7 +37,10 @@ const addDays = (d, n) => {
 const fmtDay = (key) =>
   new Date(key + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 const hrs = (m) => (m / 60).toFixed(m % 60 === 0 ? 0 : 1);
-const fmtMin = (m) => `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, "0")}m`;
+const fmtMin = (m) => {
+  const t = Math.round(m); // round total first so 119.5 -> "2h 00m", never "1h 60m"
+  return `${Math.floor(t / 60)}h ${String(t % 60).padStart(2, "0")}m`;
+};
 const clockFmt = (sec) =>
   `${String(Math.floor(sec / 3600)).padStart(2, "0")}:${String(Math.floor((sec % 3600) / 60)).padStart(2, "0")}:${String(
     Math.floor(sec % 60)
