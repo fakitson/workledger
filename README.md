@@ -37,6 +37,13 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 Without these, the app runs fully on localStorage.
 
+With Supabase configured:
+
+1. Run `supabase/migrations/001_ledger.sql` against your project (SQL editor or `supabase db push`). It creates the `ledger` table (`id, user_id, entries jsonb, settings jsonb, world int[]`) with RLS so each user can only touch their own row.
+2. Enable **anonymous sign-ins** (Authentication → Providers) — the app signs each device in anonymously to get a `user_id` for RLS. Swap in real auth later if you want cross-device sync under one account.
+
+localStorage remains a synchronous write-through cache, so nothing is lost if a tab closes mid-sync; the newest copy wins on load.
+
 ## Deploy
 
 Point Vercel at this directory (framework preset: Vite). Set the two `VITE_SUPABASE_*` environment variables in the Vercel project. Every push auto-deploys.
