@@ -5,7 +5,9 @@ import { clockFmt, dayKey, fmtMin, hhmmOf, isValidKey, shiftKey, todayKey, uid, 
 import { isVerified, records, summarize } from "./lib/insights";
 import { buildBank, download, statementMarkdown } from "./lib/statement";
 import { PLOT_PRICE_MIN } from "./lib/world";
+import { mergeBackup } from "./lib/backup";
 import DraftForm from "./components/DraftForm";
+import BackupPanel from "./components/BackupPanel";
 import TodayPage from "./pages/TodayPage";
 import InsightsPage from "./pages/InsightsPage";
 import LedgerPage from "./pages/LedgerPage";
@@ -216,6 +218,13 @@ export default function WorkLedger() {
   };
   const updateEntry = (id, patch) => setEntries((list) => list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const deleteEntry = (id) => setEntries((list) => list.filter((x) => x.id !== id));
+  const restoreBackup = (incoming) => {
+    const r = mergeBackup({ entries, settings, world }, incoming, DEFAULT_SETTINGS);
+    setEntries(r.entries);
+    setWorld(r.world);
+    setSettings(r.settings);
+    return r;
+  };
   const exportStatement = () =>
     download(`work-statement-${new Date().toISOString().slice(0, 10)}.md`, statementMarkdown({ bank: buildBank(entries), settings, stats, sym }));
 
@@ -400,7 +409,14 @@ export default function WorkLedger() {
         />
       )}
       {route.page === "insights" && <InsightsPage {...pageProps} />}
-      {route.page === "ledger" && <LedgerPage {...pageProps} onLogOn={manual} onExport={exportStatement} />}
+      {route.page === "ledger" && (
+        <LedgerPage
+          {...pageProps}
+          onLogOn={manual}
+          onExport={exportStatement}
+          backup={<BackupPanel entries={entries} settings={settings} world={world} onRestore={restoreBackup} />}
+        />
+      )}
       {route.page === "world" && <WorldPage world={world} setWorld={setWorld} walletMin={walletMin} money={money} />}
     </div>
   );

@@ -389,3 +389,100 @@ test("goals are editable and drive the daily goal bar", async ({ page }) => {
   await goalInput.fill("5");
   await expect(page.getByText(/2h 30m to go/)).toBeVisible();
 });
+
+/* ---------- backup & restore ---------- */
+
+// Exactly what the pre-insights version kept in localStorage.
+const oldVersionState = () => ({
+  entries: [
+    entry({ id: "old-1", date: dayKey(addDays(new Date(), -2)), minutes: 120, project: "OldProj", output: "old focus", mode: "focus", mult: 1.5, started: "09:15 AM" }),
+    entry({ id: "old-2", date: dayKey(addDays(new Date(), -1)), minutes: 45, project: "OldProj", output: "old unverified", evidence: "" }),
+  ],
+  settings: { name: "Datallain", rate: 30, currency: "EUR" },
+  running: null,
+  lastProject: "OldProj",
+  world: [900],
+  savedAt: Date.now(),
+});
+
+test("restore pasted data copied from another address's browser storage", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("empty-hint")).toBeVisible();
+  await page.getByRole("button", { name: "Restore my history →" }).click();
+  await expect(page).toHaveURL(/#\/ledger\/backup$/);
+
+  // copy(localStorage.getItem(...)) yields the raw JSON string
+  await page.getByLabel("Backup data").fill(JSON.stringify(oldVersionState()));
+  await expect(page.getByTestId("backup")).toContainText("Found 2 blocks · 2h 45m");
+  await page.getByRole("button", { name: "Restore these blocks" }).click();
+  await expect(page.getByText("Restored 2 blocks and 1 forest plot.")).toBeVisible();
+
+  // settings come across into a fresh ledger; focus multiplier survives: 120min × 1.5 at €30/h = €90
+  await expect(page.getByText("DATALLAIN · €30/HR BASE", { exact: false })).toBeVisible();
+  await page.reload();
+  await page.goto("/#/insights/all");
+  await expect(page.getByTestId("stat-worked")).toContainText("2h 45m");
+  await expect(page.getByTestId("stat-focus")).toContainText("2h 00m");
+
+  // restoring the same thing again adds nothing
+  await page.goto("/#/ledger/backup");
+  await page.getByLabel("Backup data").fill(JSON.stringify(JSON.stringify(oldVersionState()))); // double-quoted paste
+  await page.getByRole("button", { name: "Restore these blocks" }).click();
+  await expect(page.getByText("Restored 0 blocks (2 already here, skipped).")).toBeVisible();
+});
+
+test("restore never overwrites existing blocks or settings", async ({ page }) => {
+  await seed(page, baseState([entry({ output: "already here" })], { name: "Current", rate: 40 }));
+  await page.goto("/#/ledger/backup");
+  await page.getByLabel("Backup data").fill(JSON.stringify(oldVersionState()));
+  await page.getByRole("button", { name: "Restore these blocks" }).click();
+  await expect(page.getByText(/Restored 2 blocks/)).toBeVisible();
+  const s = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
+  expect(s.entries.map((e) => e.output).sort()).toEqual(["already here", "old focus", "old unverified"]);
+  expect(s.settings.name).toBe("Current");
+  expect(s.settings.rate).toBe(40);
+});
+
+test("download a backup, then restore it and a statement file in a fresh browser", async ({ page, browser }) => {
+  await seed(page, baseState([entry({ output: "backed up", reflection: "note to self", rating: 7 }), entry({ output: "second", evidence: "" })]));
+  await page.goto("/#/ledger");
+
+  const dl1 = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Download backup \(2 blocks\)/ }).click();
+  const backupPath = await (await dl1).path();
+  const backup = JSON.parse(fs.readFileSync(backupPath, "utf-8"));
+  expect(backup.app).toBe("workledger");
+  expect(backup.entries).toHaveLength(2);
+
+  const dl2 = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export statement" }).click();
+  const mdPath = await (await dl2).path();
+
+  // fresh context = a different browser with empty storage
+  const ctx = await browser.newContext();
+  const fresh = await ctx.newPage();
+  await fresh.goto("/#/ledger/backup");
+  await fresh.locator('#backup input[type="file"]').setInputFiles({ name: "statement.md", mimeType: "text/markdown", buffer: fs.readFileSync(mdPath) });
+  await expect(fresh.getByTestId("backup")).toContainText("Found 2 blocks");
+  await expect(fresh.getByTestId("backup")).toContainText("From a statement file");
+  await fresh.getByRole("button", { name: "Restore these blocks" }).click();
+  const restored = await fresh.evaluate((k) => JSON.parse(localStorage.getItem(k)).entries, KEY);
+  const b = restored.find((e) => e.output === "backed up");
+  expect(b.reflection).toBe("note to self");
+  expect(b.rating).toBe(7);
+  expect(b.evidence).toBe("https://example.com/evidence");
+  expect(restored.find((e) => e.output === "second").evidence).toBe("");
+
+  // the JSON backup on top adds nothing new (same content)
+  await fresh.locator('#backup input[type="file"]').setInputFiles(backupPath);
+  await fresh.getByRole("button", { name: "Restore these blocks" }).click();
+  await expect(fresh.getByText("Restored 0 blocks (2 already here, skipped).")).toBeVisible();
+  await ctx.close();
+});
+
+test("restore rejects junk with a clear message", async ({ page }) => {
+  await page.goto("/#/ledger/backup");
+  await page.getByLabel("Backup data").fill("hello this is not data");
+  await expect(page.getByText(/doesn't look like Work Ledger data/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Restore these blocks" })).toHaveCount(0);
+});
