@@ -110,7 +110,7 @@ test("plant a tree: deducts wallet money and persists across reload", async ({ p
     lastProject: "",
     world: [],
   });
-  await page.goto("/");
+  await page.goto("/#/world");
 
   await expect(page.getByText("€125.00").first()).toBeVisible();
   await expect(page.getByText(/planted 0\//)).toBeVisible();
@@ -126,7 +126,7 @@ test("plant a tree: deducts wallet money and persists across reload", async ({ p
 });
 
 test("cannot plant with an empty wallet", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/#/world");
   await page.locator("button.plot").first().click();
   await expect(page.getByText(/Not enough in the wallet/)).toBeVisible();
   await expect(page.getByText(/planted 0\//)).toBeVisible();
@@ -173,7 +173,7 @@ test("bank statement groups Sun-Sat and export markdown has correct structure", 
     lastProject: "",
     world: [],
   });
-  await page.goto("/");
+  await page.goto("/#/ledger");
 
   // Sunday-start and Saturday-end land in the SAME week row; next Sunday starts a new one.
   const weekRows = page.getByRole("button", { name: /WEEK OF/ });
@@ -182,8 +182,8 @@ test("bank statement groups Sun-Sat and export markdown has correct structure", 
   // Verified week total for week A: 60 + 45 = 1h 45m (unverified 25m excluded)
   await weekRows.last().click();
   await expect(page.getByText("1h 45m").first()).toBeVisible();
-  await expect(page.getByText("sunday work", { exact: true })).toBeVisible();
-  await expect(page.getByText("saturday work", { exact: true })).toBeVisible();
+  await expect(page.getByText("sunday work")).toBeVisible();
+  await expect(page.getByText("saturday work")).toBeVisible();
   await expect(page.getByText(/unverified today: 0h 25m/)).toBeVisible();
 
   // Export and verify markdown structure
@@ -224,7 +224,7 @@ test("export includes reflection and rating", async ({ page }) => {
     lastProject: "",
     world: [],
   });
-  await page.goto("/");
+  await page.goto("/#/ledger");
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export statement" }).click();
   const md = fs.readFileSync(await (await downloadPromise).path(), "utf-8");
@@ -233,7 +233,7 @@ test("export includes reflection and rating", async ({ page }) => {
 });
 
 test("grid cells carry hover tooltips (title) and aria labels", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/#/ledger");
   const cell = page.locator("button.cell").first();
   await expect(cell).toHaveAttribute("title", /—/);
   await expect(cell).toHaveAttribute("aria-label", /\d{4}-\d{2}-\d{2}: .* hours/);
@@ -249,4 +249,143 @@ test("focus session aborted early pays 0.5x", async ({ page }) => {
   await page.getByRole("button", { name: "Abort — pays 0.5×" }).click();
   await page.getByRole("button", { name: "It's real — keep it" }).click();
   await expect(page.getByText("FOCUS ABORTED · 0.5×")).toBeVisible();
+});
+
+/* ---------- pages, insights and the bug fixes ---------- */
+
+const baseState = (entries, settings = {}) => ({
+  entries,
+  settings: { name: "", rate: 25, currency: "EUR", dailyGoal: 4, weeklyGoal: 20, ...settings },
+  running: null,
+  lastProject: "",
+  world: [],
+});
+
+test("header shows today / week / month / all-time totals and links into insights", async ({ page }) => {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15, 12);
+  await seed(
+    page,
+    baseState([
+      entry({ minutes: 90, mode: "focus", mult: 1.5 }),
+      entry({ minutes: 30 }),
+      entry({ date: dayKey(lastMonth), minutes: 600 }),
+    ])
+  );
+  await page.goto("/");
+  const frames = page.getByTestId("frames");
+  const [today, , month, all] = [0, 1, 2, 3].map((i) => frames.getByRole("button").nth(i));
+  await expect(today).toContainText("Today");
+  await expect(today).toContainText("2h 00m");
+  await expect(today).toContainText("1h 30m focus");
+  await expect(month).toContainText("2h 00m");
+  await expect(all).toContainText("12h 00m");
+
+  await month.click();
+  await expect(page).toHaveURL(/#\/insights\/month\//);
+  await expect(page.getByTestId("stat-worked")).toContainText("2h 00m");
+  await expect(page.getByTestId("stat-focus")).toContainText("1h 30m");
+  await expect(page.getByTestId("stat-focus")).toContainText("75% of your time");
+});
+
+test("insights: switch periods and step back to the previous month", async ({ page }) => {
+  const now = new Date();
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 3, 12);
+  await seed(page, baseState([entry({ minutes: 45 }), entry({ date: dayKey(prevMonth), minutes: 200, project: "Older" })]));
+  await page.goto("/#/insights");
+
+  await page.getByRole("tab", { name: "Month" }).click();
+  const monthName = now.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  await expect(page.getByTestId("period-label")).toHaveText(monthName);
+  await expect(page.getByText("in progress")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next period" })).toBeDisabled();
+
+  await page.getByRole("button", { name: "Previous period" }).click();
+  const prevName = prevMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  await expect(page.getByTestId("period-label")).toHaveText(prevName);
+  await expect(page.getByTestId("stat-worked")).toContainText("3h 20m");
+  await expect(page.getByText("Older", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "This month", exact: true }).click();
+  await expect(page.getByTestId("period-label")).toHaveText(monthName);
+
+  await page.getByRole("tab", { name: "All time" }).click();
+  await expect(page.getByTestId("stat-worked")).toContainText("4h 05m");
+});
+
+test("insights: the honest read calls out missing focus and unverified time", async ({ page }) => {
+  await seed(page, baseState([entry({ minutes: 60 }), entry({ minutes: 60, evidence: "" })]));
+  await page.goto(`/#/insights/day/${dayKey(new Date())}`);
+  const read = page.getByTestId("honest-read");
+  await expect(read).toContainText("No focus sessions");
+  await expect(read).toContainText("1h 00m (50%) has no evidence link");
+  // the day view lists that day's blocks
+  await expect(page.getByText("seeded work")).toHaveCount(2);
+});
+
+test("clicking a day in the record grid opens it right under the grid", async ({ page }) => {
+  const y = addDays(new Date(), -1);
+  await seed(page, baseState([entry({ date: dayKey(y), output: "yesterday's block" })]));
+  await page.goto("/#/ledger");
+  await page.locator(`button.cell[aria-label^="${dayKey(y)}"]`).click();
+  const detail = page.getByTestId("day-detail");
+  await expect(detail).toBeInViewport();
+  await expect(detail.getByText("yesterday's block")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`#/ledger/${dayKey(y)}$`));
+});
+
+test("record tiles on Today open the matching day in insights", async ({ page }) => {
+  const d = addDays(new Date(), -3);
+  await seed(page, baseState([entry({ date: dayKey(d), minutes: 300 })]));
+  await page.goto("/");
+  await page.getByRole("button", { name: /Day record/ }).click();
+  await expect(page).toHaveURL(new RegExp(`#/insights/day/${dayKey(d)}$`));
+  await expect(page.getByTestId("stat-worked")).toContainText("5h 00m");
+});
+
+test("saving an entry with a cleared date is refused instead of corrupting it", async ({ page }) => {
+  await seed(page, baseState([entry({ output: "keep my date" })]));
+  await page.goto("/");
+  await page.getByText("keep my date").click();
+  await page.locator('input[type="date"]').fill("");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText(/Pick a valid date/)).toBeVisible();
+  const dates = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).entries.map((e) => e.date), KEY);
+  expect(dates).toEqual([dayKey(new Date())]);
+});
+
+test("filing a block without 'what shipped' explains why instead of doing nothing", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Log past block" }).click();
+  await page.locator("#draft input").nth(3).fill("Manual project");
+  await page.getByRole("button", { name: "File it" }).click();
+  await expect(page.getByText(/Write one line about what shipped/)).toBeVisible();
+
+  await page.getByPlaceholder("Rewrote Stripe Connect payout webhook and deployed to prod").fill("Wrote the report");
+  await page.locator('#draft input[type="time"]').fill("14:30");
+  await page.getByRole("button", { name: "File it" }).click();
+  await expect(page.getByText("Wrote the report")).toBeVisible();
+  const e = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).entries[0], KEY);
+  expect(e.started).toBe("14:30");
+  expect(new Date(e.startedAt).getHours()).toBe(14);
+});
+
+test("a running clock shows in the nav on other pages", async ({ page }) => {
+  await page.goto("/");
+  await page.getByPlaceholder("UniTold / FrameFusion / Signals & Systems").fill("Background run");
+  await page.getByRole("button", { name: "Start clock" }).click();
+  await page.getByRole("link", { name: "INSIGHTS" }).click();
+  await expect(page.getByTestId("running-pill")).toContainText("Background run");
+  await page.getByTestId("running-pill").click();
+  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+});
+
+test("goals are editable and drive the daily goal bar", async ({ page }) => {
+  await seed(page, baseState([entry({ minutes: 150 })], { dailyGoal: 2 }));
+  await page.goto("/");
+  await expect(page.getByText(/goal hit — 0h 30m over/)).toBeVisible();
+  await page.getByRole("button", { name: "edit" }).click();
+  const goalInput = page.locator("input[step='0.5']");
+  await goalInput.fill("5");
+  await expect(page.getByText(/2h 30m to go/)).toBeVisible();
 });

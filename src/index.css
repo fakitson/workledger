@@ -33,6 +33,26 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.barcol:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.barcol:not(:disabled):hover {
+  outline: 2px solid #2b4a7a;
+  outline-offset: -1px;
+}
+
+nav a:hover {
+  color: #18241f !important;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #2b4a7a;
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .pulse {
     animation: p 1.6s ease-in-out infinite;
