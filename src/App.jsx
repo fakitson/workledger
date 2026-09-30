@@ -5,7 +5,7 @@ import { clockFmt, dayKey, fmtMin, hhmmOf, isValidKey, shiftKey, todayKey, uid, 
 import { isVerified, records, summarize } from "./lib/insights";
 import { buildBank, download, statementMarkdown } from "./lib/statement";
 import { PLOT_PRICE_MIN } from "./lib/world";
-import { mergeBackup } from "./lib/backup";
+import { makeBackup, mergeBackup } from "./lib/backup";
 import DraftForm from "./components/DraftForm";
 import BackupPanel from "./components/BackupPanel";
 import TodayPage from "./pages/TodayPage";
@@ -218,6 +218,10 @@ export default function WorkLedger() {
   };
   const updateEntry = (id, patch) => setEntries((list) => list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const deleteEntry = (id) => setEntries((list) => list.filter((x) => x.id !== id));
+  const downloadBackup = () => {
+    download(`workledger-backup-${new Date().toISOString().slice(0, 10)}.json`, makeBackup({ entries, settings, world }), "application/json");
+    setSettings((s) => ({ ...s, lastBackupAt: Date.now() }));
+  };
   const restoreBackup = (incoming) => {
     const r = mergeBackup({ entries, settings, world }, incoming, DEFAULT_SETTINGS);
     setEntries(r.entries);
@@ -406,6 +410,7 @@ export default function WorkLedger() {
           manual={manual}
           inCooldown={inCooldown}
           tick={tick}
+          onBackup={downloadBackup}
         />
       )}
       {route.page === "insights" && <InsightsPage {...pageProps} />}
@@ -414,10 +419,15 @@ export default function WorkLedger() {
           {...pageProps}
           onLogOn={manual}
           onExport={exportStatement}
-          backup={<BackupPanel entries={entries} settings={settings} world={world} onRestore={restoreBackup} />}
+          backup={<BackupPanel entries={entries} settings={settings} onRestore={restoreBackup} onDownload={downloadBackup} />}
         />
       )}
       {route.page === "world" && <WorldPage world={world} setWorld={setWorld} walletMin={walletMin} money={money} />}
+
+      <footer data-testid="version" style={{ padding: "36px 20px 0", fontSize: 10, color: C.inkSoft, textAlign: "center" }}>
+        Work Ledger · version {__BUILD_COMMIT__} · built{" "}
+        {new Date(__BUILD_TIME__).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+      </footer>
     </div>
   );
 }

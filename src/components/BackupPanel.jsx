@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { C, btn, card, ghostBtn, h2, input, label, note } from "../theme";
 import { fmtMin } from "../lib/dates";
-import { makeBackup, parseBackup } from "../lib/backup";
-import { download } from "../lib/statement";
+import { parseBackup } from "../lib/backup";
 
 const CONSOLE_CMD = 'copy(localStorage.getItem("worklog:v1"))';
 
-export default function BackupPanel({ entries, settings, world, onRestore }) {
+export default function BackupPanel({ entries, settings, onRestore, onDownload }) {
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -55,12 +54,13 @@ export default function BackupPanel({ entries, settings, world, onRestore }) {
 
       <button
         style={{ ...btn(C.ink, C.paper), marginBottom: 18 }}
-        onClick={() =>
-          download(`workledger-backup-${new Date().toISOString().slice(0, 10)}.json`, makeBackup({ entries, settings, world }), "application/json")
-        }
+        onClick={onDownload}
       >
         Download backup ({entries.length} blocks)
       </button>
+      {settings.lastBackupAt && (
+        <span style={{ ...note, marginLeft: 12 }}>last backup {new Date(settings.lastBackupAt).toLocaleDateString()}</span>
+      )}
 
       <div style={card}>
         <div style={label}>Restore</div>
