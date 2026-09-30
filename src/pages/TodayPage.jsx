@@ -101,6 +101,17 @@ export default function TodayPage(p) {
 
   return (
     <div>
+      {entries.length === 0 && (
+        <div data-testid="empty-hint" style={{ margin: "16px 20px 0", border: `1.5px solid ${C.stamp}`, background: C.card, padding: "12px 14px" }}>
+          <div style={{ ...label, color: C.stamp }}>Empty ledger</div>
+          <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.5 }}>
+            Logged work before at a different web address or on another device? Your history is still there — bring it over with Restore.
+          </div>
+          <button style={{ ...ghostBtn(), marginTop: 10, padding: "7px 14px" }} onClick={() => go("/ledger/backup")}>
+            Restore my history →
+          </button>
+        </div>
+      )}
       <Clock {...p} />
 
       {/* TODAY SO FAR */}

@@ -8,7 +8,7 @@ import EntryList from "../components/EntryList";
 const WEEKS = 26;
 const level = (m) => (m === 0 ? 0 : m < 60 ? 1 : m < 150 ? 2 : m < 300 ? 3 : 4);
 
-export default function LedgerPage({ entries, money, route, go, onSave, onDelete, onLogOn, onExport }) {
+export default function LedgerPage({ entries, money, route, go, onSave, onDelete, onLogOn, onExport, backup }) {
   const [openWeeks, setOpenWeeks] = useState({});
   const selDay = isValidKey(route.a) ? route.a : null;
   const detailRef = useRef(null);
@@ -45,6 +45,10 @@ export default function LedgerPage({ entries, money, route, go, onSave, onDelete
   useEffect(() => {
     if (selDay && detailRef.current) detailRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [selDay]);
+
+  useEffect(() => {
+    if (route.a === "backup") document.getElementById("backup")?.scrollIntoView({ block: "start" });
+  }, [route.a]);
 
   return (
     <div>
@@ -207,6 +211,8 @@ export default function LedgerPage({ entries, money, route, go, onSave, onDelete
           </div>
         )}
       </div>
+
+      {backup}
     </div>
   );
 }
