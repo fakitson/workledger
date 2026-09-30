@@ -486,3 +486,17 @@ test("restore rejects junk with a clear message", async ({ page }) => {
   await expect(page.getByText(/doesn't look like Work Ledger data/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Restore these blocks" })).toHaveCount(0);
 });
+
+test("backup reminder appears until you download a backup; version stamp is shown", async ({ page }) => {
+  await seed(page, baseState([entry()]));
+  await page.goto("/");
+  await expect(page.getByTestId("version")).toContainText(/version \w+ · built/);
+  const reminder = page.getByTestId("backup-reminder");
+  await expect(reminder).toContainText("No backup yet.");
+  const dl = page.waitForEvent("download");
+  await reminder.getByRole("button", { name: "Download backup" }).click();
+  expect((await dl).suggestedFilename()).toMatch(/^workledger-backup-.*\.json$/);
+  await expect(reminder).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("backup-reminder")).toHaveCount(0);
+});

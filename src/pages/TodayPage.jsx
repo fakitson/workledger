@@ -112,6 +112,20 @@ export default function TodayPage(p) {
           </button>
         </div>
       )}
+      {entries.length > 0 && (!settings.lastBackupAt || Date.now() - settings.lastBackupAt > 7 * 86400000) && (
+        <div
+          data-testid="backup-reminder"
+          style={{ margin: "16px 20px 0", border: `1.5px solid ${C.gold}`, background: C.card, padding: "10px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}
+        >
+          <div style={{ fontSize: 12, flex: "1 1 220px", lineHeight: 1.5 }}>
+            <b>{settings.lastBackupAt ? `Last backup ${Math.floor((Date.now() - settings.lastBackupAt) / 86400000)} days ago.` : "No backup yet."}</b> Your
+            ledger only lives in this browser — keep a copy in case it gets cleared.
+          </div>
+          <button style={{ ...btn(C.gold, C.paper), padding: "7px 14px" }} onClick={p.onBackup}>
+            Download backup
+          </button>
+        </div>
+      )}
       <Clock {...p} />
 
       {/* TODAY SO FAR */}
